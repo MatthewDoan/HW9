@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1073588335219",
+    "firebase_url": "https://mobile-app-hw8.firebaseio.com",
+    "project_id": "mobile-app-hw8",
+    "storage_bucket": "mobile-app-hw8.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1073588335219:android:3e74284158802f869cf006",
+        "android_client_info": {
+          "package_name": "edu.gvsu.cis.convcalc"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1073588335219-gb1jjhk2bse7s9vecf2b9595r4ummlbv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEjxBDTulIxCfeUBuNj4C3SIanZs6Ivi8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1073588335219-gb1jjhk2bse7s9vecf2b9595r4ummlbv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
