@@ -1,8 +1,12 @@
 package edu.gvsu.cis.convcalc;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -10,6 +14,7 @@ import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.google.firebase.database.ChildEventListener;
@@ -28,13 +33,15 @@ import java.util.List;
 import edu.gvsu.cis.convcalc.UnitsConverter.LengthUnits;
 import edu.gvsu.cis.convcalc.UnitsConverter.VolumeUnits;
 import edu.gvsu.cis.convcalc.dummy.HistoryContent;
+import edu.gvsu.cis.convcalc.webservice.WeatherService;
+
+import static edu.gvsu.cis.convcalc.webservice.WeatherService.BROADCAST_WEATHER;
+
 
 public class MainActivity extends AppCompatActivity {
 
     public static int SETTINGS_RESULT = 1;
     public static int HISTORY_RESULT = 2;
-
-
 
     private enum Mode {Length, Volume};
 
@@ -46,26 +53,32 @@ public class MainActivity extends AppCompatActivity {
     private EditText toField;
     private EditText fromField;
 
+    private TextView current;
+    private TextView temperature;
+
+    private ImageView weatherIcon;
+
 
     private TextView toUnits;
     private TextView fromUnits;
     private TextView title;
 
-    public static List<HistoryContent.HistoryItem> allHistory;
-
     DatabaseReference topRef;
+    public static List<HistoryContent.HistoryItem> allHistory;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
-
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         allHistory = new ArrayList<HistoryContent.HistoryItem>();
-
         calcButton = findViewById(R.id.calcButton);
         clearButton = findViewById(R.id.clearButton);
         modeButton = findViewById(R.id.modeButton);
+
+        current = findViewById(R.id.current);
+        temperature = findViewById(R.id.temp);
+        weatherIcon = findViewById(R.id.weatherIcon);
+
 
         toField = findViewById(R.id.to);
         fromField = findViewById(R.id.from);
@@ -75,8 +88,13 @@ public class MainActivity extends AppCompatActivity {
 
         title = findViewById(R.id.title);
 
+
+
+
         calcButton.setOnClickListener(v -> {
+            WeatherService.startGetWeather(this, "42.963686", "-85.888595", "ad1bb49e81dc5bee4ffcbe77f10f36ea");
             doConversion();
+
         });
 
         clearButton.setOnClickListener(v -> {
@@ -104,6 +122,10 @@ public class MainActivity extends AppCompatActivity {
             title.setText(mode.toString() + " Converter");
         });
 
+
+
+
+
         toField.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override
             public void onFocusChange(View view, boolean b) {
@@ -118,12 +140,51 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-//
+
+
+
     }
 
+
+    private BroadcastReceiver weatherReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Bundle bundle = intent.getExtras();
+            double temp = bundle.getDouble("TEMPERATURE");
+            String summary = bundle.getString("SUMMARY");
+            String icon = bundle.getString("ICON");
+            String key = bundle.getString("KEY");
+            int resID = getResources().getIdentifier(icon , "drawable", getPackageName());
+
+            if (key.equals("ad1bb49e81dc5bee4ffcbe77f10f36ea"))  {
+                current.setText(summary);
+                temperature.setText(Double.toString(temp));
+                weatherIcon.setImageResource(resID);
+            }
+        }
+    };
+
+
+    @Override
+    public void onResume(){
+        super.onResume();
+        allHistory.clear();
+        topRef = FirebaseDatabase.getInstance().getReference("history");
+        topRef.addChildEventListener (chEvListener);
+        IntentFilter weatherFilter = new IntentFilter(BROADCAST_WEATHER);
+        LocalBroadcastManager.getInstance(this).registerReceiver(weatherReceiver, weatherFilter);
+    }
+
+    @Override
+    public void onPause(){
+        super.onPause();
+        topRef.removeEventListener(chEvListener);
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(weatherReceiver);
+    }
+
+
+
     private void doConversion() {
-
-
         EditText dest = null;
         String val = "";
         String fromVal = fromField.getText().toString();
@@ -136,6 +197,7 @@ public class MainActivity extends AppCompatActivity {
             val = toVal;
             dest = fromField;
         }
+        HistoryContent.HistoryItem item;
         if (dest != null) {
             switch(mode) {
                 case Length:
@@ -152,10 +214,14 @@ public class MainActivity extends AppCompatActivity {
                     dest.setText(Double.toString(cVal));
                     // remember the calculation.
                     DateTimeFormatter fmt = ISODateTimeFormat.dateTime();
-                    HistoryContent.HistoryItem item = new HistoryContent.HistoryItem(dVal, cVal, mode.toString(),
+                    item = new HistoryContent.HistoryItem(dVal, cVal, mode.toString(),
                             fUnits.toString(), tUnits.toString(), fmt.print(DateTime.now()));
                     HistoryContent.addItem(item);
                     topRef.push().setValue(item);
+
+//                    item = new HistoryContent.HistoryItem(dVal, cVal, mode.toString(),
+//                            toUnits.getText().toString(), fromUnits.getText().toString(), DateTime.now());
+//                    HistoryContent.addItem(item);
                     break;
                 case Volume:
                     VolumeUnits vtUnits, vfUnits;
@@ -166,15 +232,18 @@ public class MainActivity extends AppCompatActivity {
                         vfUnits = VolumeUnits.valueOf(toUnits.getText().toString());
                         vtUnits = VolumeUnits.valueOf(fromUnits.getText().toString());
                     }
-                    DateTimeFormatter fmt2 = ISODateTimeFormat.dateTime();
                     Double vdVal = Double.parseDouble(val);
                     Double vcVal = UnitsConverter.convert(vdVal, vfUnits, vtUnits);
                     dest.setText(Double.toString(vcVal));
                     // remember the calculation.
-                    HistoryContent.HistoryItem vitem = new HistoryContent.HistoryItem(vdVal, vcVal, mode.toString(),
+                    DateTimeFormatter fmt2 = ISODateTimeFormat.dateTime();
+                    item = new HistoryContent.HistoryItem(vdVal, vcVal, mode.toString(),
                             vfUnits.toString(), vtUnits.toString(), fmt2.print(DateTime.now()));
-                    HistoryContent.addItem(vitem);
-                    topRef.push().setValue(vitem);
+                    HistoryContent.addItem(item);
+                    topRef.push().setValue(item);
+//                    item = new HistoryContent.HistoryItem(vdVal, vcVal, mode.toString(),
+//                            toUnits.getText().toString(), fromUnits.getText().toString(), DateTime.now());
+//                    HistoryContent.addItem(item);
                     break;
             }
 
@@ -237,20 +306,6 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-
-    @Override
-    public void onResume(){
-        super.onResume();
-        allHistory.clear();
-        topRef = FirebaseDatabase.getInstance().getReference("history");
-        topRef.addChildEventListener (chEvListener);
-    }
-
-    @Override
-    public void onPause(){
-        super.onPause();
-        topRef.removeEventListener(chEvListener);
-    }
     private ChildEventListener chEvListener = new ChildEventListener() {
         @Override
         public void onChildAdded(DataSnapshot dataSnapshot, String s) {
@@ -287,7 +342,6 @@ public class MainActivity extends AppCompatActivity {
 
         }
     };
-
 
 
 }
